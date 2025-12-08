@@ -120,6 +120,6 @@ Android 客户端源码位于 `android/` 目录下，采用 **Kotlin + MVVM + Ro
 ## 📸 预览 (Screenshots)
 
 \<div align="center"\>
-\<img src="assets/web_dashboard.png" width="45%" alt="Web Dashboard" /\>
-\<img src="assets/android_app.png" width="45%" alt="Android App" /\>
+\<img src="https://raw.githubusercontent.com/wszd158/nas-todo/main/assets/web_dashboard.png" width="45%" ... />
+\<img src="https://raw.githubusercontent.com/wszd158/nas-todo/main/assets/android_app.png" width="45%" ... />
 \</div\>
