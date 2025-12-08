@@ -1,0 +1,36 @@
+<div class="modal fade" id="addTaskModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form action="/add_task" method="POST">
+                <div class="modal-header">
+                    <h5 class="modal-title">新建待办</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="text" name="title" class="form-control mb-2" placeholder="标题（必填）" required>
+                    <div class="row mb-2">
+                        <div class="col">
+                            <input type="text" name="category" class="form-control" placeholder="分类 (可输入或从下拉选)" list="categoryList">
+                        </div>
+                        <div class="col">
+                            <select name="priority" class="form-select">
+                                <option value="Normal">普通</option>
+                                <option value="High">高优</option>
+                                <option value="Low">低优</option>
+                            </select>
+                        </div>
+                    </div>
+                    <textarea name="content" class="form-control mb-2" placeholder="简介/备注" rows="2"></textarea>
+                    <div class="row mb-2">
+                        <div class="col"><label class="small">开始</label><input type="datetime-local" name="start_date" class="form-control"></div>
+                        <div class="col"><label class="small">截止</label><input type="datetime-local" name="due_date" class="form-control"></div>
+                    </div>
+                    <input type="number" name="recurrence_days" class="form-control" placeholder="循环天数 (0不循环)" value="0">
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-primary">创建</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

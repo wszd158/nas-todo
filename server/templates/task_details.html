@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ task.title }} - 详情</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <style>
+        .note-img { object-fit: cover; height: 150px; width: 100%; border-radius: 5px; cursor: pointer; }
+        .note-img:hover { opacity: 0.9; }
+    </style>
+</head>
+<body class="bg-light">
+    <div class="container py-4">
+        <a href="/" class="btn btn-outline-secondary mb-3">← 返回看板</a>
+        
+        <div class="card mb-4 shadow-sm border-0">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <h2 class="{{ 'text-decoration-line-through text-muted' if task.completed else '' }}">{{ task.title }}</h2>
+                    <span class="badge bg-primary align-self-center">{{ task.category }}</span>
+                </div>
+                <div class="text-muted mb-3">
+                    <small>优先级: {{ task.priority }}</small> | 
+                    <small>创建于: {{ task.created_at.strftime('%Y-%m-%d %H:%M') if task.created_at else '未知' }}</small> |
+                    <small>截止: {{ task.due_date.strftime('%Y-%m-%d %H:%M') if task.due_date else '无' }}</small>
+                    {% if task.completed and task.completed_at %}
+        				<br><span class="text-success fw-bold">✔ 实际完成于: {{ task.completed_at.strftime('%Y-%m-%d %H:%M') }}</span>
+    				{% endif %}
+                </div>
+                <p class="lead fs-6">{{ task.content }}</p>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header bg-white fw-bold">📝 添加新笔记</div>
+            <div class="card-body">
+                <form action="/add_note/{{ task.id }}" method="POST" enctype="multipart/form-data">
+                    <div class="mb-2">
+                        <textarea name="content" class="form-control" rows="3" placeholder="写点什么..." required></textarea>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <input type="file" name="images" class="form-control form-control-sm w-50" accept="image/*" multiple>
+                        <button type="submit" class="btn btn-primary btn-sm">发送</button>
+                    </div>
+                    <div class="form-text text-muted small">按住 Ctrl 或 Shift 可选择多张图片</div>
+                </form>
+            </div>
+        </div>
+
+        <div class="list-group">
+            {% for note in task.notes|reverse %}
+            <div class="list-group-item list-group-item-action flex-column align-items-start mb-3 border rounded shadow-sm bg-white">
+                <div class="d-flex w-100 justify-content-between border-bottom pb-2 mb-2">
+                    <small class="text-muted">{{ note.created_at.strftime('%Y-%m-%d %H:%M') }}</small>
+                    <div>
+                        <button class="btn btn-sm btn-link text-primary p-0 me-2" onclick='openEditNoteModal({{ note.to_dict()|tojson }})'>
+                            <i class="bi bi-pencil-square"></i> 编辑
+                        </button>
+                        <a href="/download_note/{{ note.id }}" class="text-secondary me-2"><i class="bi bi-download"></i></a>
+                        <a href="/delete_note/{{ note.id }}" class="text-danger" onclick="return confirm('删除这条笔记？')"><i class="bi bi-x-lg"></i></a>
+                    </div>
+                </div>
+                
+                <p class="mb-2" style="white-space: pre-wrap;">{{ note.content }}</p>
+                
+                {% if note.get_images() %}
+                <div class="row g-2">
+                    {% for img in note.get_images() %}
+                    <div class="col-4 col-md-3 col-lg-2">
+                        <a href="{{ url_for('uploaded_file', filename=img) }}" target="_blank">
+                            <img src="{{ url_for('uploaded_file', filename=img) }}" class="note-img border" alt="img">
+                        </a>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+            {% else %}
+                <p class="text-center text-muted py-3">还没有笔记。</p>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="modal fade" id="editNoteModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form action="/edit_note" method="POST" enctype="multipart/form-data">
+                    <input type="hidden" name="note_id" id="edit_note_id">
+                    <div class="modal-header">
+                        <h5 class="modal-title">编辑笔记</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <label class="form-label">内容</label>
+                        <textarea name="content" id="edit_note_content" class="form-control mb-3" rows="4" required></textarea>
+                        
+                        <label class="form-label d-block">现有图片 (勾选以删除)</label>
+                        <div id="edit_note_images" class="row g-2 mb-3">
+                            </div>
+
+                        <label class="form-label">追加新图片</label>
+                        <input type="file" name="new_images" class="form-control" accept="image/*" multiple>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="submit" class="btn btn-primary">保存修改</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function openEditNoteModal(note) {
+            const modal = new bootstrap.Modal(document.getElementById('editNoteModal'));
+            document.getElementById('edit_note_id').value = note.id;
+            document.getElementById('edit_note_content').value = note.content;
+            
+            // 处理现有图片的显示与删除选项
+            const imgContainer = document.getElementById('edit_note_images');
+            imgContainer.innerHTML = ''; // 清空
+            
+            if (note.images && note.images.length > 0) {
+                note.images.forEach(img => {
+                    const div = document.createElement('div');
+                    div.className = 'col-4 position-relative';
+                    div.innerHTML = `
+                        <img src="/uploads/${img}" class="img-fluid rounded border" style="height: 80px; width: 100%; object-fit: cover;">
+                        <div class="form-check position-absolute top-0 start-0 m-1">
+                            <input class="form-check-input bg-danger border-0" type="checkbox" name="delete_images" value="${img}" style="width: 20px; height: 20px;">
+                        </div>
+                    `;
+                    imgContainer.appendChild(div);
+                });
+            } else {
+                imgContainer.innerHTML = '<span class="text-muted small">无图片</span>';
+            }
+            
+            modal.show();
+        }
+    </script>
+	<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // 1. 系统保活
+        setInterval(() => { fetch('/ping'); }, 5 * 60 * 1000);
+
+        // 2. 笔记防丢机制 (Auto-Save Draft)
+        const noteInput = document.querySelector('textarea[name="content"]');
+        const taskId = "{{ task.id }}"; // 获取当前任务ID
+        const storageKey = `draft_note_task_${taskId}`;
+
+        // 页面加载时：检查有没有未保存的草稿
+        document.addEventListener('DOMContentLoaded', () => {
+            const savedDraft = localStorage.getItem(storageKey);
+            if (savedDraft && savedDraft.trim() !== '' && noteInput) {
+                if (confirm('检测到您有上次未提交的笔记草稿，是否恢复？')) {
+                    noteInput.value = savedDraft;
+                }
+            }
+        });
+
+        // 输入时：实时保存到 LocalStorage
+        if (noteInput) {
+            noteInput.addEventListener('input', () => {
+                localStorage.setItem(storageKey, noteInput.value);
+            });
+        }
+
+        // 提交表单时：清除草稿
+        const noteForm = document.querySelector('form[action^="/add_note"]');
+        if (noteForm) {
+            noteForm.addEventListener('submit', () => {
+                localStorage.removeItem(storageKey);
+            });
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,52 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <style name="Theme.NasTodoApp" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/blue_500</item>
+        <item name="colorPrimaryVariant">@color/blue_700</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+
+        <item name="android:windowBackground">@color/light_bg</item>
+        <item name="colorSurface">@color/light_surface</item>
+        <item name="colorOnSurface">@color/light_text_primary</item>
+        <item name="colorOnSurfaceVariant">@color/light_text_secondary</item>
+
+        <item name="android:statusBarColor">@color/blue_500</item>
+        <item name="android:windowLightStatusBar">false</item>
+
+        <item name="actionMenuTextColor">#FFFFFF</item>
+    </style>
+
+    <style name="Theme.NasTodoApp.Dark" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/dark_surface</item>
+        <item name="colorPrimaryVariant">@color/dark_surface</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+
+        <item name="android:windowBackground">@color/dark_bg</item>
+        <item name="colorSurface">@color/dark_surface</item>
+        <item name="colorOnSurface">@color/dark_text_primary</item>
+        <item name="colorOnSurfaceVariant">@color/dark_text_secondary</item>
+
+        <item name="android:statusBarColor">@color/dark_surface</item>
+        <item name="android:windowLightStatusBar">false</item>
+
+        <item name="android:textColorPrimary">#FFFFFF</item>
+        <item name="android:textColor">#FFFFFF</item>
+        <item name="actionMenuTextColor">#FFFFFF</item>
+
+        <item name="popupMenuBackground">@color/dark_surface</item>
+    </style>
+
+    <style name="Theme.NasTodoApp.Care" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">#795548</item> <item name="colorPrimaryVariant">#5D4037</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+
+        <item name="android:windowBackground">@color/care_bg</item>
+        <item name="colorSurface">@color/care_surface</item>
+        <item name="colorOnSurface">@color/care_text_primary</item>
+        <item name="colorOnSurfaceVariant">@color/care_text_secondary</item>
+
+        <item name="android:statusBarColor">#795548</item>
+        <item name="android:windowLightStatusBar">false</item>
+
+        <item name="actionMenuTextColor">#FFFFFF</item>
+    </style>
+</resources>

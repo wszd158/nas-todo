@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="zh" data-bs-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>NAS 待办清单</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="bg-light">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
+        <div class="container">
+            <a class="navbar-brand" href="/">📝 NAS To-Do</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navContent">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            
+            <div class="collapse navbar-collapse" id="navContent">
+
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link {{ 'active' if filters.show_archived == 'true' else '' }}" href="/?show_archived=true">
+                        <i class="bi bi-archive"></i> 归档箱
+                        </a>
+                    </li>
+                    {% if filters.show_archived == 'true' %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">
+                        <i class="bi bi-arrow-left"></i> 返回清单
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+                
+                <form class="d-flex me-2" role="search" action="/" method="GET">
+                    <div class="input-group input-group-sm">
+                        <input class="form-control" type="search" name="q" placeholder="关键词..." value="{{ filters.q }}">
+                        <button class="btn btn-outline-light" type="submit"><i class="bi bi-search"></i></button>
+                    </div>
+                </form>
+
+                <button class="btn btn-sm btn-outline-secondary me-2" type="button" data-bs-toggle="collapse" data-bs-target="#filterPanel">
+                    <i class="bi bi-funnel"></i> 筛选
+                </button>
+
+                <button class="btn btn-sm btn-outline-warning me-2" id="themeToggle">
+                    <i class="bi bi-moon-stars"></i>
+                </button>
+
+                <a href="/logout" class="btn btn-sm btn-outline-danger">退出</a>
+            </div>
+        </div>
+    </nav>
+
+    <datalist id="categoryList">
+        {% for cat in categories %}
+        <option value="{{ cat }}">
+        {% endfor %}
+    </datalist>
+
+    <div class="container">
+        <div class="collapse mb-4 {{ 'show' if filters.date_start or filters.category else '' }}" id="filterPanel">
+            <div class="card card-body">
+                <form action="/" method="GET" class="row g-2 align-items-end">
+                    <input type="hidden" name="q" value="{{ filters.q }}">
+                    
+                    <div class="col-md-3">
+                        <label class="small">分类</label>
+                        <select name="category" class="form-select form-select-sm">
+                            <option value="">所有分类</option>
+                            {% for cat in categories %}
+                            <option value="{{ cat }}" {{ 'selected' if filters.category == cat else '' }}>{{ cat }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="col-md-2">
+                        <label class="small">时间类型</label>
+                        <select name="date_type" class="form-select form-select-sm">
+                            <option value="created" {{ 'selected' if filters.date_type == 'created' else '' }}>创建时间</option>
+                            <option value="completed" {{ 'selected' if filters.date_type == 'completed' else '' }}>完成时间</option>
+                        </select>
+                    </div>
+                    
+                    <div class="col-md-3">
+                        <label class="small">日期范围</label>
+                        <div class="input-group input-group-sm">
+                            <input type="date" name="date_start" class="form-control" value="{{ filters.date_start }}">
+                            <span class="input-group-text">-</span>
+                            <input type="date" name="date_end" class="form-control" value="{{ filters.date_end }}">
+                        </div>
+                    </div>
+
+                    <div class="col-md-2">
+                        <label class="small">排序</label>
+                        <select name="sort_by" class="form-select form-select-sm">
+                            <option value="default" {{ 'selected' if filters.sort_by == 'default' else '' }}>默认</option>
+                            <option value="created_desc" {{ 'selected' if filters.sort_by == 'created_desc' else '' }}>最新创建</option>
+                            <option value="completed_desc" {{ 'selected' if filters.sort_by == 'completed_desc' else '' }}>最新完成</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-2">
+                        <button type="submit" class="btn btn-primary btn-sm w-100">应用筛选</button>
+                    </div>
+                    
+                    <div class="col-12 text-end">
+                        <a href="/" class="small text-muted text-decoration-none">重置所有筛选</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addTaskModal">
+                <i class="bi bi-plus-lg"></i> 新建
+            </button>
+            <button class="btn btn-outline-secondary btn-sm ms-2" onclick="toggleBatchMode()">
+                <i class="bi bi-check2-square"></i> 批量
+            </button>
+            <div class="btn-group btn-group-sm">
+                <button type="button" class="btn btn-outline-secondary active" id="btn-card-view" onclick="switchView('card')"><i class="bi bi-grid-fill"></i></button>
+                <button type="button" class="btn btn-outline-secondary" id="btn-list-view" onclick="switchView('list')"><i class="bi bi-list-ul"></i></button>
+            </div>
+        </div>
+
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}<div class="alert alert-info">{{ messages[0] }}</div>{% endif %}
+        {% endwith %}
+
+        <div id="view-card">
+            {% for category, tasks in grouped_tasks.items() %}
+                <h5 class="category-header">{{ category }} <span class="badge bg-secondary rounded-pill">{{ tasks|length }}</span></h5>
+                <div class="row">
+                    {% for task in tasks %}
+                    <div class="col-md-6 col-lg-4 mb-3">
+                        <div class="card h-100 task-card priority-{{ task.priority }} {{ 'completed' if task.completed else '' }}">
+                            <input type="checkbox" class="task-checkbox form-check-input" value="{{ task.id }}" onclick="event.stopPropagation()">
+                            <div class="card-body position-relative">
+                                <a href="/task/{{ task.id }}" class="text-decoration-none text-reset">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <h6 class="card-title fw-bold">{{ task.title }}</h6>
+                                        {% if task.notes %}<i class="bi bi-journal-text text-primary"></i>{% endif %}
+                                    </div>
+                                    
+                                    <div class="small text-muted mb-2" style="font-size: 0.8rem;">
+                                        <div class="mb-1"><i class="bi bi-plus-circle"></i> 创建: {{ task.created_at.strftime('%m-%d %H:%M') if task.created_at else '未知' }}</div>
+                                        
+                                        {% if task.completed and task.completed_at %}
+                                            <div class="text-success"><i class="bi bi-check-circle-fill"></i> 完成: {{ task.completed_at.strftime('%m-%d %H:%M') }}</div>
+                                        {% elif task.due_date %}
+                                            <div class="{{ 'text-danger' if task.due_date < now else '' }}"><i class="bi bi-alarm"></i> 截止: {{ task.due_date.strftime('%m-%d %H:%M') }}</div>
+                                        {% endif %}
+                                    </div>
+
+                                    <p class="card-text text-truncate">{{ task.content }}</p>
+                                </a>
+                                <div class="mt-2 border-top pt-2 d-flex justify-content-between">
+                                    {% if task.is_archived %}
+                                        <a href="/unarchive/{{ task.id }}" class="btn btn-sm btn-outline-warning" title="恢复任务">
+                                            <i class="bi bi-arrow-counterclockwise"></i> 恢复
+                                        </a>
+                                        <a href="/delete/{{ task.id }}" class="btn btn-sm btn-outline-danger border-0" onclick="return confirm('彻底删除？不可恢复！')"><i class="bi bi-trash"></i></a>
+    
+                                    {% else %}
+                                        <a href="/complete/{{ task.id }}" class="btn btn-sm {{ 'btn-success' if not task.completed else 'btn-secondary' }}">
+                                            {{ '✔' if not task.completed else '↩' }}
+                                        </a>
+                                        
+                                        <a href="/download_task/{{ task.id }}" class="btn btn-sm btn-outline-info border-0" title="导出MD">
+                                            <i class="bi bi-file-word"></i>
+                                        </a>
+                                <div>
+            <button class="btn btn-sm btn-outline-primary border-0" onclick='openEditModal({{ task.to_dict()|tojson }})'><i class="bi bi-pencil"></i></button>
+            <a href="/archive/{{ task.id }}" class="btn btn-sm btn-outline-secondary border-0" title="移入归档"><i class="bi bi-archive"></i></a>
+        </div>
+    {% endif %}
+</div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            {% endfor %}
+        </div>
+
+        <div id="view-list" class="d-none">
+            <div class="accordion" id="taskAccordion">
+                {% for category, tasks in grouped_tasks.items() %}
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="heading{{ loop.index }}">
+                        <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ loop.index }}">
+                            {{ category }} ({{ tasks|length }})
+                        </button>
+                    </h2>
+                    <div id="collapse{{ loop.index }}" class="accordion-collapse collapse show">
+                        <div class="accordion-body p-0">
+                            <ul class="list-group list-group-flush">
+                                {% for task in tasks %}
+                                <li class="list-group-item d-flex justify-content-between align-items-center {{ 'list-group-item-secondary' if task.completed else '' }}">
+                                    <div class="me-2"><input type="checkbox" class="task-checkbox form-check-input" value="{{ task.id }}"></div>
+                                    <div class="d-flex align-items-center flex-grow-1">
+                                        <a href="/complete/{{ task.id }}" class="btn btn-sm me-3 {{ 'btn-success' if not task.completed else 'btn-secondary' }}">
+                                            {{ '✔' if not task.completed else '↩' }}
+                                        </a>
+                                        <a href="/task/{{ task.id }}" class="text-decoration-none text-reset flex-grow-1">
+                                            <span class="{{ 'text-decoration-line-through' if task.completed else '' }}">{{ task.title }}</span>
+                                            
+                                            <span class="badge bg-light text-dark border ms-2 fw-normal">
+                                                创建: {{ task.created_at.strftime('%m-%d') if task.created_at else '-' }}
+                                            </span>
+
+                                            {% if task.notes %} <i class="bi bi-journal-text text-primary ms-1"></i> {% endif %}
+                                        </a>
+                                    </div>
+                                    <div>
+                                        <button class="btn btn-sm btn-link" onclick='openEditModal({{ task.to_dict()|tojson }})'>编辑</button>
+                                        <a href="/delete/{{ task.id }}" class="btn btn-sm btn-link text-danger" onclick="return confirm('删除？')">删除</a>
+                                    </div>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    {% include 'modal_add_task.html' %} 
+    {% include 'modal_edit_task.html' %}
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+
+    <div id="batch-action-bar">
+    <div class="container d-flex justify-content-between align-items-center">
+        <div>
+            <span class="fw-bold me-2">已选择 <span id="selected-count">0</span> 项</span>
+            <button class="btn btn-outline-secondary btn-sm" onclick="toggleSelectAll()">
+                <i class="bi bi-check-all"></i> 全选
+            </button>
+        </div>
+
+        <div>
+            <button class="btn btn-secondary btn-sm me-2" onclick="toggleBatchMode()">取消</button>
+            
+            {% if filters.show_archived == 'true' %}
+                <button class="btn btn-danger btn-sm me-2" onclick="submitBatchAction('delete')">
+                    <i class="bi bi-trash"></i> 彻底删除
+                </button>
+            {% else %}
+                <button class="btn btn-warning btn-sm me-2" onclick="submitBatchAction('archive')">
+                    <i class="bi bi-archive"></i> 归档选中
+                </button>
+            {% endif %}
+            
+            <button class="btn btn-primary btn-sm" onclick="submitBatchAction('export')">
+                <i class="bi bi-file-zip"></i> 打包下载
+            </button>
+        </div>
+    </div>
+    </div>
+</body>
+</html>

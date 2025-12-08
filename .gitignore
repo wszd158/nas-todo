@@ -1,0 +1,43 @@
+# ===============
+# 1. 全局通用垃圾 (Global)
+# ===============
+.DS_Store
+Thumbs.db
+._*
+# 屏蔽 JetBrains 全家桶配置 (IDEA/Android Studio/PyCharm)
+.idea/
+*.iml
+# 屏蔽 VS Code 配置
+.vscode/
+
+# ===============
+# 2. 后端部分 (Server)
+# ===============
+# 忽略数据库和上传文件 (隐私!)
+server/data/
+server/uploads/
+
+# 忽略 Python 编译缓存和环境
+server/__pycache__/
+*.pyc
+server/venv/
+server/.env
+
+# ===============
+# 3. 安卓部分 (Android)
+# ===============
+# 安卓构建产物 (体积巨大，必须忽略)
+android/.gradle/
+android/build/
+android/app/build/
+
+# 本地配置 (每个人电脑路径不同，不能传)
+android/local.properties
+
+# 签名文件 (隐私!)
+*.keystore
+*.jks
+
+# 移动端临时文件
+android/captures/
+android/.externalNativeBuild/

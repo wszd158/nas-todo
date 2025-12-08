@@ -1,0 +1,21 @@
+version: '3'
+services:
+  nas-todo:
+    build: .
+    container_name: nas-todo
+    restart: always
+    ports:
+      - "5000:5000"
+    volumes:
+      # 1. 数据持久化 (保持不变)
+      - ./data:/data
+      # 2. 同步宿主机时间
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+    environment:
+      # 3. 修改密钥为随机字符串
+      - SECRET_KEY=changeme_please_set_a_random_string
+      # 4. Python 实时输出日志
+      - PYTHONUNBUFFERED=1
+      - TZ=Asia/Shanghai
+      - FLASK_DEBUG=0

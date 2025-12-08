@@ -1,0 +1,8 @@
+Flask
+Flask-SQLAlchemy
+Flask-Login
+flask-cors
+Werkzeug
+python-docx
+waitress
+Pillow

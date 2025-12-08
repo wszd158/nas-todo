@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>登录 - NAS Todo</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { display: flex; align-items: center; justify-content: center; height: 100vh; background-color: #f5f5f5; }
+        .form-signin { width: 100%; max-width: 330px; padding: 15px; margin: auto; }
+    </style>
+</head>
+<body>
+    <main class="form-signin text-center">
+        <form method="POST">
+            <h1 class="h3 mb-3 fw-normal">请登录</h1>
+            {% with messages = get_flashed_messages() %}
+                {% if messages %}<div class="alert alert-danger">{{ messages[0] }}</div>{% endif %}
+            {% endwith %}
+            <div class="form-floating mb-2">
+                <input type="text" name="username" class="form-control" id="floatingInput" placeholder="用户名" required>
+                <label for="floatingInput">用户名</label>
+            </div>
+            <div class="form-floating mb-3">
+                <input type="password" name="password" class="form-control" id="floatingPassword" placeholder="密码" required>
+                <label for="floatingPassword">密码</label>
+            </div>
+            <button class="w-100 btn btn-lg btn-primary mb-2" type="submit" name="action" value="login">登录</button>
+            <button class="w-100 btn btn-lg btn-outline-secondary" type="submit" name="action" value="register">注册新账号</button>
+        </form>
+    </main>
+</body>
+</html>

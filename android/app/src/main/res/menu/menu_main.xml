@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <item
+        android:id="@+id/action_search"
+        android:icon="@android:drawable/ic_menu_search"
+        android:title="搜索"
+        app:showAsAction="ifRoom"
+        app:actionViewClass="androidx.appcompat.widget.SearchView" />
+
+    <item
+        android:id="@+id/action_sort"
+        android:title="排序方式"
+        android:icon="@android:drawable/ic_menu_sort_by_size"
+        app:showAsAction="ifRoom">
+        <menu>
+            <item
+                android:id="@+id/sort_created_desc"
+                android:title="创建时间 (最新)" />
+            <item
+                android:id="@+id/sort_due_date"
+                android:title="截止日期 (最急)" />
+            <item
+                android:id="@+id/sort_completed"
+                android:title="完成时间" />
+        </menu>
+    </item>
+
+    <item
+        android:id="@+id/action_toggle_archive"
+        android:title="查看已归档"
+        android:checkable="true"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_refresh"
+        android:title="刷新"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_logout"
+        android:title="退出登录"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_theme"
+        android:title="主题颜色"
+        app:showAsAction="never" />
+</menu>

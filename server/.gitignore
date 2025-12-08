@@ -1,0 +1,16 @@
+# 创建 .gitignore 文件并写入规则
+cat > .gitignore <<EOF
+# 忽略 Python 缓存
+__pycache__/
+*.py[cod]
+
+# 忽略数据库文件 (数据要自己备份，别传到代码库)
+data/
+*.db
+
+# 忽略上传的图片文件夹
+uploads/
+
+# 忽略 Docker 可能产生的临时文件
+.DS_Store
+EOF
