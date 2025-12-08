@@ -86,7 +86,7 @@ Android 客户端源码位于 `android/` 目录下，采用 **Kotlin + MVVM + Ro
 
 ### 📥 下载与使用
 
-1.  前往本项目的 **[https://github.com/wszd158/nas-todo/projects]** 下载最新版 `.apk` 安装包。
+1.  前往本项目的 **[ https://github.com/wszd158/nas-todo/tags ]** 下载最新版 `.apk` 安装包。
 2.  安装后打开 App，输入你的自托管服务器地址进行登录。
       * *示例地址：`http://192.168.1.5:5000` 或 `https://todo.yourdomain.com`*
 
@@ -119,7 +119,7 @@ Android 客户端源码位于 `android/` 目录下，采用 **Kotlin + MVVM + Ro
 
 ## 📸 预览 (Screenshots)
 
-\<div align="center"\>
-\<img src="https://raw.githubusercontent.com/wszd158/nas-todo/main/assets/web_dashboard.png" width="45%" ... />
-\<img src="https://raw.githubusercontent.com/wszd158/nas-todo/main/assets/android_app.png" width="45%" ... />
-\</div\>
+![TestImage](assets/web_dashboard.png)
+
+更多截图可见./assets路径
+
