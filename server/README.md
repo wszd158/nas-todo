@@ -1,6 +1,6 @@
 # 📝 NAS To-Do (Private Cloud Task Manager)
 
-![Version](https://img.shields.io/badge/version-1.8.0-blue) ![Docker](https://img.shields.io/badge/deployment-docker-2496ED) ![Python](https://img.shields.io/badge/backend-Flask-green)
+![Version](https://img.shields.io/badge/version-1.7.7-blue) ![Docker](https://img.shields.io/badge/deployment-docker-2496ED) ![Python](https://img.shields.io/badge/backend-Flask-green)
 
 **NAS To-Do** 是一款专为 NAS 用户打造的、**自托管**的轻量级待办事项与项目日志管理系统。
 
