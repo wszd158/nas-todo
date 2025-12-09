@@ -2,7 +2,7 @@
 
 > 一个基于 **离线优先 (Offline-First)** 架构的个人待办事项管理客户端，专为自托管 NAS 用户设计。
 
-![Version](https://img.shields.io/badge/version-1.1.1-blue)
+![Version](https://img.shields.io/badge/version-1.1.5-blue)
 ![Language](https://img.shields.io/badge/language-Kotlin-purple)
 ![Architecture](https://img.shields.io/badge/architecture-MVVM%20%2B%20Repository-green)
 ![Status](https://img.shields.io/badge/status-Stable-success)
