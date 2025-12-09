@@ -15,6 +15,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.SearchView
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import android.app.ProgressDialog
 import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
 import com.google.gson.Gson
@@ -54,6 +55,7 @@ class MainActivity : AppCompatActivity() {
     private var currentSearchQuery = ""
     private var selectedCategory: String? = null
 
+
     // 数据库实例
     private lateinit var db: AppDatabase
 
@@ -77,7 +79,7 @@ class MainActivity : AppCompatActivity() {
         val pass = if (!intentPass.isNullOrEmpty()) intentPass else savedPass
 
         if (serverUrl.isEmpty() || user.isEmpty() || pass.isNullOrEmpty()) {
-            logout()
+            performLogout()
             return
         }
 
@@ -145,7 +147,10 @@ class MainActivity : AppCompatActivity() {
             }
             R.id.action_refresh -> { loadTasks(); true }
             R.id.action_theme -> { showThemeChooser(); true }
-            R.id.action_logout -> { logout(); true }
+            R.id.action_logout -> {
+                performLogout()
+                true
+            }
             else -> super.onOptionsItemSelected(item)
         }
     }
@@ -162,19 +167,48 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun logout() {
-        val prefs = getSharedPreferences("NasTodoPrefs", Context.MODE_PRIVATE)
-        prefs.edit().remove("password").remove("remember_me").apply()
+    private fun performLogout() {
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("退出登录")
+            .setMessage("确定要退出吗？\n\n为了保护隐私，退出后将清空本地所有数据。")
+            .setPositiveButton("退出") { _, _ ->
+                // 显示进度条，体验更好
+                val loading = ProgressDialog(this).apply {
+                    setMessage("正在清理数据...")
+                    setCancelable(false)
+                    show()
+                }
 
-        CoroutineScope(Dispatchers.IO).launch {
-            db.taskDao().clearSyncedTasks()
-            withContext(Dispatchers.Main) {
-                val intent = Intent(this@MainActivity, LoginActivity::class.java)
-                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                startActivity(intent)
-                finish()
+                CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        // 1. 【核心】清空数据库（这就是你想要的优化）
+                        db.clearAllTables()
+
+                        // 2. 清空账号密码缓存
+                        val prefs = getSharedPreferences("NasTodoPrefs", Context.MODE_PRIVATE)
+                        prefs.edit().clear().apply()
+
+                        // 3. 跳转
+                        withContext(Dispatchers.Main) {
+                            loading.dismiss()
+                            val intent = Intent(this@MainActivity, LoginActivity::class.java)
+                            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                            startActivity(intent)
+                            finish()
+                        }
+                    } catch (e: Exception) {
+                        withContext(Dispatchers.Main) {
+                            loading.dismiss()
+                            Toast.makeText(this@MainActivity, "清理失败", Toast.LENGTH_SHORT).show()
+                            // 即使清理失败也强制跳转，防止死循环
+                            startActivity(Intent(this@MainActivity, LoginActivity::class.java))
+                            finish()
+                        }
+                    }
+                }
             }
-        }
+            .setNegativeButton("取消", null)
+            .show()
     }
 
     private fun loadTasks() {

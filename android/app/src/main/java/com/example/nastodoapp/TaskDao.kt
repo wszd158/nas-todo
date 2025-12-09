@@ -46,4 +46,6 @@ interface TaskDao {
 
     @Query("DELETE FROM offline_notes WHERE id = :noteId")
     suspend fun deleteOfflineNote(noteId: String)
+
+    @Delete fun delete(task: Task)
 }

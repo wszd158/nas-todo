@@ -325,6 +325,7 @@ def login():
             else: flash('用户名或密码错误')
     return render_template('login.html')
 
+
 @app.route('/logout')
 @login_required
 def logout(): logout_user(); return redirect(url_for('login'))
@@ -390,8 +391,114 @@ def delete_task(id):
 
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):
-    from flask import send_from_directory
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+    """
+    提供上传文件的访问
+    """
+    try:
+        # 安全检查：防止目录遍历
+        if '..' in filename or filename.startswith('/'):
+            return "Invalid filename", 400
+        
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        
+        # 检查文件是否存在
+        if not os.path.exists(file_path):
+            print(f"文件不存在: {file_path}")
+            return "File not found", 404
+        
+        # 使用 send_from_directory 替代手动读取
+        # 它会自动处理文件发送、缓存、断点续传等
+        from flask import send_from_directory
+        
+        # 设置较长的缓存时间（1小时）以减轻服务器压力
+        response = send_from_directory(
+            app.config['UPLOAD_FOLDER'], 
+            filename,
+            max_age=3600
+        )
+        
+        # 添加 CORS 头
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        
+        return response
+        
+    except Exception as e:
+        print(f"ERROR: 提供文件失败: {e}")
+        return f"Error: {e}", 500
+
+@app.route('/image/<filename>')
+def serve_image(filename):
+    """
+    专门用于提供图片文件，支持压缩和格式转换
+    """
+    try:
+        # 安全检查
+        if '..' in filename or filename.startswith('/'):
+            return "Invalid filename", 400
+        
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        
+        if not os.path.exists(file_path):
+            return "File not found", 404
+        
+        # 检查是否是图片文件
+        image_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'}
+        ext = os.path.splitext(filename)[1].lower()
+        
+        if ext in image_extensions:
+            # 对于图片文件，可以添加图片优化
+            # 例如：压缩、格式转换、调整大小等
+            from PIL import Image
+            import io
+            
+            # 获取请求参数
+            quality = request.args.get('quality', 85, type=int)
+            width = request.args.get('width', type=int)
+            height = request.args.get('height', type=int)
+            
+            with Image.open(file_path) as img:
+                # 转换模式（如果是RGBA转换为RGB）
+                if img.mode in ('RGBA', 'LA', 'P'):
+                    if img.mode == 'P' and 'transparency' in img.info:
+                        img = img.convert('RGBA')
+                    else:
+                        img = img.convert('RGB')
+                
+                # 调整大小（如果有指定）
+                if width or height:
+                    original_width, original_height = img.size
+                    
+                    # 保持宽高比
+                    if width and not height:
+                        height = int(original_height * width / original_width)
+                    elif height and not width:
+                        width = int(original_width * height / original_height)
+                    
+                    img = img.resize((width, height), Image.Resampling.LANCZOS)
+                
+                # 保存到内存
+                output = io.BytesIO()
+                img.save(output, format='JPEG' if ext in {'.jpg', '.jpeg'} else 'PNG', 
+                         quality=quality, optimize=True)
+                output.seek(0)
+                
+                # 返回图片
+                response = Response(output.getvalue(), mimetype='image/jpeg' if ext in {'.jpg', '.jpeg'} else 'image/png')
+                response.headers['Cache-Control'] = 'public, max-age=86400'  # 24小时缓存
+                response.headers['Access-Control-Allow-Origin'] = '*'
+                
+                return response
+        else:
+            # 非图片文件，直接发送
+            return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+            
+    except Exception as e:
+        print(f"图片服务错误: {e}")
+        # 如果图片处理失败，尝试直接发送原文件
+        try:
+            return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+        except:
+            return "Error serving file", 500
 
 @app.route('/archive/<id>') # 移除 int:
 @login_required
@@ -433,16 +540,48 @@ def create_task_docx(task):
                 except: doc.add_paragraph(f"[图片加载失败: {img}]")
     return doc
 
-@app.route('/download_task/<task_id>') # 移除 int:
-@login_required
+@app.route('/download_task/<task_id>') 
+# 注意：这里去掉了 @login_required，改为函数内部手动验证
 def download_task(task_id):
+    # 1. 优先尝试获取网页端登录用户 (Session / Cookie)
+    user = None
+    if current_user.is_authenticated:
+        user = current_user
+    
+    # 2. 如果网页端没登录，尝试获取 API 认证信息 (安卓端 Basic Auth)
+    if not user:
+        auth = request.authorization
+        if auth:
+            # 在数据库查找用户并验证密码
+            db_user = User.query.filter_by(username=auth.username).first()
+            if db_user and check_password_hash(db_user.password, auth.password):
+                user = db_user
+
+    # 3. 如果两种方式都失败，返回 401 未授权
+    if not user:
+        return jsonify({'error': 'Unauthorized - Please login or provide credentials'}), 401
+
+    # 4. 获取任务并校验权限 (防止下载别人的任务)
     task = Task.query.get_or_404(task_id)
-    if task.user_id != current_user.id: return redirect(url_for('dashboard'))
-    doc = create_task_docx(task)
-    f = BytesIO()
-    doc.save(f)
-    f.seek(0)
-    return send_file(f, as_attachment=True, download_name=secure_filename(f"{task.title}.docx"))
+    if task.user_id != user.id: 
+        return jsonify({'error': 'Forbidden - You do not own this task'}), 403
+
+    # 5. 生成文档并下载 (原有逻辑)
+    try:
+        doc = create_task_docx(task)
+        f = BytesIO()
+        doc.save(f)
+        f.seek(0)
+        # 生成安全的文件名
+        safe_name = secure_filename(f"{task.title}.docx")
+        # 针对中文文件名可能被 secure_filename 过滤为空的情况做个保底
+        if not safe_name: 
+            safe_name = f"task_{task.id}.docx"
+            
+        return send_file(f, as_attachment=True, download_name=safe_name)
+    except Exception as e:
+        print(f"Download Error: {e}")
+        return jsonify({'error': 'Failed to generate document'}), 500
 
 @app.route('/batch_action', methods=['POST'])
 @login_required
@@ -475,6 +614,78 @@ def batch_action():
         memory_file.seek(0)
         return send_file(memory_file, download_name=f"export_{datetime.now().strftime('%Y%m%d')}.zip", as_attachment=True)
     return redirect(request.referrer)
+
+
+# ==========================================
+# 补全：网页端笔记操作 (Web UI Notes)
+# ==========================================
+
+# 1. 网页端新增笔记
+@app.route('/add_note/<task_id>', methods=['POST']) # 已修复：去掉了 int:
+@login_required
+def add_note(task_id):
+    # 使用字符串 ID 查询
+    task = Task.query.get_or_404(task_id)
+    if task.user_id != current_user.id: 
+        return redirect(url_for('dashboard'))
+    
+    files = request.files.getlist('images')
+    saved_images = []
+    for file in files:
+        if file and file.filename:
+            filename = secure_filename(f"{datetime.now().timestamp()}_{file.filename}")
+            save_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file.save(save_path)
+            # 生成缩略图
+            create_thumbnail(save_path)
+            saved_images.append(filename)
+            
+    # task.id 是字符串，这里直接用
+    new_note = Note(content=request.form.get('content'), images=json.dumps(saved_images), task_id=task.id)
+    db.session.add(new_note)
+    db.session.commit()
+    return redirect(url_for('task_details', task_id=task.id))
+
+# 2. 网页端编辑笔记
+@app.route('/edit_note', methods=['POST'])
+@login_required
+def edit_note():
+    # 从表单获取 note_id (字符串)
+    note_id = request.form.get('note_id')
+    note = Note.query.get_or_404(note_id)
+    
+    if note.task.user_id != current_user.id: 
+        return redirect(url_for('dashboard'))
+        
+    note.content = request.form.get('content')
+    
+    # 处理图片删除
+    current_images = note.get_images()
+    for img in request.form.getlist('delete_images'):
+        if img in current_images: current_images.remove(img)
+        
+    # 处理新图片上传
+    for file in request.files.getlist('new_images'):
+        if file and file.filename:
+            filename = secure_filename(f"{datetime.now().timestamp()}_{file.filename}")
+            file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+            create_thumbnail(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+            current_images.append(filename)
+            
+    note.images = json.dumps(current_images)
+    db.session.commit() # onupdate 会自动更新 updated_at
+    return redirect(url_for('task_details', task_id=note.task.id))
+
+# 3. 网页端删除笔记
+@app.route('/delete_note/<note_id>') # 已修复：去掉了 int:
+@login_required
+def delete_note(note_id):
+    note = Note.query.get_or_404(note_id)
+    tid = note.task_id
+    if note.task.user_id == current_user.id: 
+        db.session.delete(note)
+        db.session.commit()
+    return redirect(url_for('task_details', task_id=tid))
 
 # ==========================================
 # API 接口区域：UUID 支持 + 离线同步
@@ -515,7 +726,7 @@ def api_get_tasks():
             note_dict = n.to_dict()
             images_info = []
             for img in n.get_images():
-                full_url = url_for('uploaded_file', filename=img, _external=True)
+                full_url = url_for('serve_image', filename=img, _external=True)
                 thumb_name = img.rsplit('.', 1)[0] + '_thumb.jpg'
                 thumb_path = os.path.join(upload_folder, thumb_name)
                 if not os.path.exists(thumb_path): create_thumbnail(os.path.join(upload_folder, img))
@@ -585,7 +796,7 @@ def api_task_action(task_id):
             note_dict = n.to_dict()
             images_info = []
             for img in n.get_images():
-                full_url = url_for('uploaded_file', filename=img, _external=True)
+                full_url = url_for('serve', filename=img, _external=True)
                 thumb_name = img.rsplit('.', 1)[0] + '_thumb.jpg'
                 thumb_path = os.path.join(upload_folder, thumb_name)
                 if not os.path.exists(thumb_path): create_thumbnail(os.path.join(upload_folder, img))
@@ -708,6 +919,62 @@ def api_delete_note(note_id):
     db.session.commit()
     return jsonify({'status': 'success', 'message': 'Note deleted'})
 
+# ==========================================
+# 新增功能：用户设置 (修改密码 & 注销账号)
+# ==========================================
+
+@app.route('/change_password', methods=['POST'])
+@login_required
+def change_password():
+    old_password = request.form.get('old_password')
+    new_password = request.form.get('new_password')
+    confirm_password = request.form.get('confirm_password')
+
+    if not check_password_hash(current_user.password, old_password):
+        flash('原密码错误，修改失败')
+        return redirect(url_for('dashboard'))
+    
+    if new_password != confirm_password:
+        flash('两次输入的新密码不一致')
+        return redirect(url_for('dashboard'))
+
+    # 更新密码
+    current_user.password = generate_password_hash(new_password, method='scrypt')
+    db.session.commit()
+    flash('密码修改成功，请重新登录')
+    logout_user() # 修改密码后强制重新登录
+    return redirect(url_for('login'))
+
+@app.route('/delete_account', methods=['POST'])
+@login_required
+def delete_account():
+    password_confirmation = request.form.get('password_confirmation')
+    
+    # 验证密码以确保安全
+    if not check_password_hash(current_user.password, password_confirmation):
+        flash('密码错误，无法注销账号')
+        return redirect(url_for('dashboard'))
+
+    try:
+        # 1. 删除该用户的所有任务 (级联删除会自动删除笔记 Note)
+        tasks = Task.query.filter_by(user_id=current_user.id).all()
+        for task in tasks:
+            db.session.delete(task)
+        
+        # 2. 删除用户自身
+        db.session.delete(current_user)
+        db.session.commit()
+        
+        logout_user()
+        flash('账号及所有数据已永久删除')
+        return redirect(url_for('login'))
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Delete Account Error: {e}")
+        flash('注销账号时发生错误，请查看日志')
+        return redirect(url_for('dashboard'))
+
 if __name__ == '__main__':
     with app.app_context():
         # --- 启动时执行迁移 ---
@@ -717,5 +984,6 @@ if __name__ == '__main__':
         db.create_all()
     
     from waitress import serve
-    print("🚀 UUID 离线同步架构版启动 (含旧数据迁移)...")
-    serve(app, host='0.0.0.0', port=5000, threads=16, channel_timeout=300, cleanup_interval=300, outbuf_overflow=20 * 1024 * 1024, inbuf_overflow=20 * 1024 * 1024, connection_limit=200)
+    # 先用最保守的参数，排除配置错误
+    print("🚀 UUID 离线同步架构版启动 (调试模式)...")
+    serve(app, host='0.0.0.0', port=5000, threads=8)

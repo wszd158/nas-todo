@@ -2,10 +2,10 @@ version: '3'
 services:
   nas-todo:
     build: .
-    container_name: nas-todo
+    container_name: nas-todo-test
     restart: always
     ports:
-      - "5000:5000"
+      - "15050:5000"
     volumes:
       # 1. 数据持久化 (保持不变)
       - ./data:/data

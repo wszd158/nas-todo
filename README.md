@@ -70,6 +70,10 @@ docker-compose up -d --build
 
   - `server/data/todo.db`: SQLite 数据库文件
   - `server/data/uploads/`: 图片附件
+  
+### 4\. 注册
+
+要先输入用户名密码，再点击"注册"才能注册新用户；
 
 -----
 

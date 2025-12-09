@@ -31,6 +31,7 @@ import coil.ImageLoader
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Protocol
 import java.util.*
 import java.util.concurrent.TimeUnit
 
@@ -47,6 +48,7 @@ class TaskDetailActivity : AppCompatActivity() {
     private lateinit var btnSave: Button
     private lateinit var btnAddNote: Button
     private lateinit var btnDownloadDocx: TextView
+    private lateinit var btnDeleteTask: Button
 
     private val gson = Gson()
     private val client = OkHttpClient()
@@ -61,6 +63,7 @@ class TaskDetailActivity : AppCompatActivity() {
     private var llPreviewContainer: LinearLayout? = null // 图片预览容器
 
     private lateinit var db: AppDatabase
+
 
     private val pickImagesLauncher = registerForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
         selectedImageUris.clear()
@@ -84,8 +87,13 @@ class TaskDetailActivity : AppCompatActivity() {
         ImageLoader.Builder(this)
             .okHttpClient {
                 OkHttpClient.Builder()
+                    // 【关键修复】强制使用 HTTP/1.1 协议
+                    // 解决 Lucky/Nginx 反代在 IPv6 下 HTTP/2 握手失败导致的 Connection Reset
+                    .protocols(listOf(Protocol.HTTP_1_1))
                     .connectTimeout(30, TimeUnit.SECONDS)
                     .readTimeout(60, TimeUnit.SECONDS)
+                    // 如果你的证书是自签名的或者证书链不全，可能还需要下面这行忽略 SSL 错误
+                    // 但你的浏览器能访问，说明证书通常是受信任的，暂时不需要加忽略
                     .build()
             }
             .build()
@@ -140,6 +148,7 @@ class TaskDetailActivity : AppCompatActivity() {
         btnSave = findViewById(R.id.btnSaveDetail)
         btnAddNote = findViewById(R.id.btnAddNote)
         btnDownloadDocx = findViewById(R.id.btnDownloadDocx)
+        btnDeleteTask = findViewById(R.id.btnDeleteTask)
 
         spPriority.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, priorityOptions)
         tvStartDate.setOnClickListener { showDateTimePicker(tvStartDate) }
@@ -153,6 +162,62 @@ class TaskDetailActivity : AppCompatActivity() {
 
         btnDownloadDocx.setOnClickListener {
             currentTask?.let { task -> downloadDocx(task) }
+        }
+        btnDeleteTask.setOnClickListener { showDeleteConfirmation() }
+    }
+
+    private fun showDeleteConfirmation() {
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("删除任务")
+            .setMessage("确定要彻底删除这个任务吗？此操作无法撤销。")
+            .setPositiveButton("删除") { _, _ ->
+                performDeleteTask()
+            }
+            .setNegativeButton("取消", null)
+            .show()
+    }
+
+    private fun performDeleteTask() {
+        val task = currentTask ?: return
+
+        // 禁用按钮防连点
+        btnDeleteTask.isEnabled = false
+        btnDeleteTask.text = "删除中..."
+
+        val url = "$serverUrl/api/tasks/${task.id}"
+        val request = Request.Builder().url(url).delete().header("Authorization", authHeader).build()
+
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                // 先尝试联网删除
+                client.newCall(request).execute().use { response ->
+                    if (response.isSuccessful) {
+                        // A. 联网删除成功：直接删本地数据
+                        db.taskDao().delete(task)
+                        withContext(Dispatchers.Main) {
+                            Toast.makeText(this@TaskDetailActivity, "任务已删除", Toast.LENGTH_SHORT).show()
+                            finish() // 关闭页面返回列表
+                        }
+                    } else {
+                        throw Exception("服务器返回 ${response.code}")
+                    }
+                }
+            } catch (e: Exception) {
+                // B. 离线或网络失败：标记为“软删除”，等待下次同步（如果你的 SyncWorker 支持的话）
+                // 或者简单处理：仅提示离线无法删除 (最稳妥方案，防止数据不一致)
+
+                // 这里我们采用【直接删本地】的策略，假设用户知道离线删了服务器还在
+                // 如果你想做完美同步，需要把 is_deleted=true 存入库，并在同步逻辑里处理
+
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@TaskDetailActivity, "网络连接失败，仅删除本地缓存", Toast.LENGTH_LONG).show()
+                    // 仅删本地
+                    CoroutineScope(Dispatchers.IO).launch {
+                        db.taskDao().delete(task)
+                        withContext(Dispatchers.Main) { finish() }
+                    }
+                }
+            }
         }
     }
 
@@ -609,15 +674,44 @@ class TaskDetailActivity : AppCompatActivity() {
         if (urlPart.isBlank()) return
         try {
             var finalUrl = urlPart
-            if (!finalUrl.startsWith("http")) {
-                val base = if (serverUrl.endsWith("/")) serverUrl.dropLast(1) else serverUrl
-                val path = if (urlPart.startsWith("/")) urlPart else "/$urlPart"
-                finalUrl = "$base$path"
+
+            // 1. 【清洗脏数据】(针对 api/tasks?filename=... 的旧数据)
+            if (finalUrl.contains("filename=")) {
+                val filename = finalUrl.substringAfter("filename=")
+                finalUrl = "/static/uploads/$filename"
+                android.util.Log.w("ImageDebug", "检测到脏数据路径，已修正为: $finalUrl")
             }
 
+            // 2. 【补全域名】(处理相对路径)
+            if (!finalUrl.startsWith("http")) {
+                val base = if (serverUrl.endsWith("/")) serverUrl.dropLast(1) else serverUrl
+                val path = if (finalUrl.startsWith("/")) finalUrl else "/$finalUrl"
+
+                // 智能补全 /static (防止后端只返回 /uploads/xxx)
+                finalUrl = if (!path.startsWith("/static") && !path.startsWith("/uploads") && !path.startsWith("/image")) {
+                    "$base/static$path"
+                } else {
+                    "$base$path"
+                }
+            }
+
+            // =======================================================
+            // 3. 【协议同步 - 核心修复】
+            // 逻辑：如果我登录用的是 HTTPS，但图片地址是 HTTP，强制升级！
+            // 解决了：后端在 Docker 内不知道外面是 HTTPS，返回了 http 绝对路径导致的问题。
+            // =======================================================
+            if (serverUrl.startsWith("https://") && finalUrl.startsWith("http://")) {
+                finalUrl = finalUrl.replace("http://", "https://")
+                android.util.Log.d("ImageDebug", "检测到后端返回了 HTTP 地址，已强制同步为 HTTPS: $finalUrl")
+            }
+
+            android.util.Log.d("ImageDebug", "最终请求原图 URL: $finalUrl")
+
+            // --- 下面是 UI 代码 (保持不变) ---
             val dialog = Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen)
             val container = FrameLayout(this)
             container.setBackgroundColor(0xFF000000.toInt())
+
             val imgView = ImageView(this)
             imgView.layoutParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
             imgView.scaleType = ImageView.ScaleType.FIT_CENTER
@@ -652,7 +746,9 @@ class TaskDetailActivity : AppCompatActivity() {
                     onSuccess = { _, _ -> progressBar.visibility = View.GONE },
                     onError = { _, res ->
                         progressBar.visibility = View.GONE
-                        Toast.makeText(this@TaskDetailActivity, "加载失败: ${res.throwable.message}", Toast.LENGTH_SHORT).show()
+                        val errorMsg = res.throwable.message ?: "未知错误"
+                        android.util.Log.e("ImageDebug", "加载失败: $errorMsg")
+                        Toast.makeText(this@TaskDetailActivity, "加载失败: $errorMsg", Toast.LENGTH_SHORT).show()
                     }
                 )
             }

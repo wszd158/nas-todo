@@ -47,4 +47,5 @@
         android:id="@+id/action_theme"
         android:title="主题颜色"
         app:showAsAction="never" />
+
 </menu>
